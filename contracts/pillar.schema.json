@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glaciereq.dev/schemas/spiral-engine/pillar.schema.json",
+  "title": "Spiral Engine Pillar Contract",
+  "type": "object",
+  "required": ["pillar_id", "category", "mission"],
+  "properties": {
+    "pillar_id": { "type": "string" },
+    "category": { "type": "string" },
+    "mission": { "type": "string" },
+    "does_not_own": { "type": "array", "items": { "type": "string" } }
+  }
+}

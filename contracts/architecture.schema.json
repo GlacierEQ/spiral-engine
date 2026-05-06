@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glaciereq.dev/schemas/spiral-engine/architecture.schema.json",
+  "title": "Spiral Engine Architecture Contract",
+  "type": "object",
+  "required": ["schema_version", "pattern", "hub", "spokes", "helix", "diamond"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "pattern": {
+      "type": "object",
+      "required": ["family", "evolution"],
+      "properties": {
+        "family": { "const": "federated-pillars" },
+        "evolution": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "hub": { "type": "object" },
+    "spokes": { "type": "array", "items": { "type": "object" } },
+    "helix": { "type": "object" },
+    "diamond": {
+      "type": "array",
+      "items": { "enum": ["intake", "filter", "amplify", "output"] },
+      "minItems": 4,
+      "maxItems": 4
+    }
+  }
+}

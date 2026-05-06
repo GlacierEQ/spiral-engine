@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "repo": "GlacierEQ/spiral-engine",
+  "pillar_id": "spiral-engine",
+  "pillar_category": "doctrine",
+  "primary_role": "Architecture doctrine source for hub-and-spoke, pillars-and-pistons, Spiral Engine, Double Helix, and Diamond Architecture patterns across the Aspen Grove repo family.",
+  "status": "active",
+  "visibility": "private",
+  "architecture": {
+    "family_pattern": "federated-pillars",
+    "internal_pattern": "diamond",
+    "diamond_vertices": ["intake", "filter", "amplify", "output"],
+    "helix_strands": ["defense", "offense"],
+    "strand_assignment": "shared-rung"
+  }
+}

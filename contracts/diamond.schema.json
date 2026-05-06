@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glaciereq.dev/schemas/spiral-engine/diamond.schema.json",
+  "title": "Diamond Architecture Contract",
+  "type": "object",
+  "required": ["intake", "filter", "amplify", "output"],
+  "properties": {
+    "intake": { "type": "string" },
+    "filter": { "type": "string" },
+    "amplify": { "type": "string" },
+    "output": { "type": "string" }
+  }
+}

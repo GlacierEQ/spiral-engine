@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glaciereq.dev/schemas/spiral-engine/helix.schema.json",
+  "title": "Double Helix Contract",
+  "type": "object",
+  "required": ["defense", "offense", "rungs"],
+  "properties": {
+    "defense": { "type": "array", "items": { "type": "string" } },
+    "offense": { "type": "array", "items": { "type": "string" } },
+    "rungs": { "type": "array", "items": { "type": "string" } }
+  }
+}
