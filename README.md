@@ -1,62 +1,47 @@
-# 🌀 SPIRAL ENGINE
+# Spiral Engine — Rust Execution Kernel & Iterative Loop 🌀
 
-[![Architecture](https://img.shields.io/badge/Architecture-Double_Helix-purple)](architecture.md)
-[![Spokes](https://img.shields.io/badge/Spokes-3-blue)](spokes/)
-[![Case](https://img.shields.io/badge/Case-1FDV--23--0001009-orange)](helix/)
+> **Rust spiral execution kernel implementing multi-pass iterative loops and state advances.**
 
-**The structural DNA pattern.** Double helix hub-and-spoke where each spoke is pillar+piston. Defense and offense strands intertwined, connected by shared rungs. Each revolution compounds intelligence.
-
-This repo defines the PATTERN. `aspen-grove-operator-v7` is the living implementation. `colossal-agent` is the biological mapping.
-
-```
-DEFENSE STRAND ═══╗     ╔═══ OFFENSE STRAND
-                  ║     ║
-Void ab initio ───╫─────╫─── RICO mapping
-                  ║INTEL║
-TRO kill ─────────╫─────╫─── §1983 complaint
-                  ║EVID ║
-Custody mod ──────╫─────╫─── IACHR petition
-                  ║ACTOR║
-School access ────╫─────╫─── FBI referral
-                  ║BUILD║
-Emergency ────────╫─────╫─── Bar complaints
-                  ║     ║
-                  ╚═════╝
-                  SPIRAL
-              (compounds each revolution)
-```
-
-## Three Spokes
-
-| Spoke | Pillar | Pistons |
-|-------|--------|---------|
-| STATE | hawaii-legal-warfare | evidence-forensics, actor-intelligence, cloud-commander |
-| FEDERAL | federal-constitutional-rights + rico-enterprise-builder | actor-intelligence, legal-research-engine, osint-investigator |
-| INTERNATIONAL | international-human-rights | osint-investigator, legal-research-engine, evidence-forensics |
-
-## Relationship to Other Repos
-
-| Repo | This Is... |
-|------|-----------|
-| **spiral-engine** (this) | The architectural pattern (genetics) |
-| **colossal-agent** | The biological organism mapping (anatomy) |
-| **aspen-grove-operator-v7** | The living implementation (the body itself) |
-| **mastermind** | The autonomous nervous system |
-| **apex-fs-commander** | The sensory organs |
-
----
-*Casey Barton | 1FDV-23-0001009 | LFVBLPUL3N8N8K2FLYGCSCKMSMSRHSG9*
+[![Rust](https://img.shields.io/badge/Rust-Safety%20Critical-orange)]()
+[![Python](https://img.shields.io/badge/Python-3.9+-blue)]()
+[![Domain](https://img.shields.io/badge/Domain-Spiral%20Engine-purple)]()
 
 ---
 
-## Fleet ops (transparent)
+## 🎯 For Recruiters & Hiring Managers
 
-This repo may include **`.integrity/`** (SHA-256 baselines / watchdog) and/or a health sidecar.
-These are **documented multi-repo fleet operations**, not covert implants.
+This repository implements the **Spiral Engine** — a multi-pass iterative execution kernel written in Rust. It demonstrates:
 
-See [SECURITY_AND_FLEET_OPS.md](SECURITY_AND_FLEET_OPS.md) and
-`~/GlacierEQ_Swarm/state/PORTFOLIO_SHADOW_AND_GAUNTLET.md`.
+- **Rust state machine design** with safe mutable state transitions across passes
+- **Piston execution tracking** advancing multi-pass processing loops deterministically
+- **Zero-allocation pass transitions** ensuring predictable performance
+- **Python simulation test wrapper** verifying pass advancement and counter states
 
-## Helix strand
+**Why this matters**: Iterative processing engines require strict state transition guarantees to prevent infinite loops and memory leaks during multi-stage execution.
 
-See [HELIX_STRAND.md](HELIX_STRAND.md) — piston/spiral role in the portfolio double helix.
+---
+
+## 🔬 For Engineers & Technical Reviewers
+
+### Core Components
+
+| Component | Language | Purpose |
+|---|---|---|
+| `src/spiral_kernel.rs` | Rust | Rust kernel struct and state advancement methods |
+| `tests/test_spiral_kernel.py` | Python | Test wrapper simulating multi-pass spiral execution |
+
+---
+
+## 🤖 ML/AI & Programmatic Mesh Integration
+
+- **MCP Tool**: `advance_spiral_pass()` — execution tool for iterative reasoning agents
+- **Mastermind Sidecar**: Fully connected to APEX Highway mesh
+- **SHA-256 Integrity**: Tracked in `.integrity/file_hashes.json`
+
+---
+
+## ⚡ Quick Start
+
+```bash
+python3 tests/test_spiral_kernel.py
+```
