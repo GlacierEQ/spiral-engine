@@ -29,6 +29,5 @@ class SpiralEngine:
         return {
             "revolution": self.revolution_count,
             "status": "SPIRAL_REVOLUTION_COMPOUNDED",
-            "entry": entry,
-            "answer": 42
-        }
+            "entry": entry
+            }

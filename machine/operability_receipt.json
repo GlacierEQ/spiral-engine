@@ -1,0 +1,36 @@
+{
+  "schema": "glaciereq.operability-receipt.v1",
+  "repository": "GlacierEQ/spiral-engine",
+  "at": "2026-08-10T04:12Z",
+  "source_sha": "8cb4d76f54f71d951c869cd2167c41a3cc2f747277a727412d7705b0f9adcea4",
+  "entry": "scripts/operate.py",
+  "primary_output": {
+    "module": "spiral_engine",
+    "ok": true,
+    "repository": "GlacierEQ/spiral-engine",
+    "smoke": {
+      "args": [
+        "'sample_helix'",
+        "'sample_summary'"
+      ],
+      "content_checked": true,
+      "invoked": true,
+      "kind": "class",
+      "method": "log_revolution",
+      "module_local": true,
+      "name": "SpiralEngine",
+      "result": {
+        "entry": {
+          "helix": "sample_helix",
+          "revolution": 1,
+          "summary": "sample_summary",
+          "timestamp": 1786335309.603776
+        },
+        "revolution": 1,
+        "status": "SPIRAL_REVOLUTION_COMPOUNDED"
+      }
+    }
+  },
+  "dual_run_ok": true,
+  "result": "PASS"
+}

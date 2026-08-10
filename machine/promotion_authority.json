@@ -1,0 +1,11 @@
+{
+  "schema": "glaciereq.promotion-authority-grant.v1",
+  "repository": "GlacierEQ/spiral-engine",
+  "source_sha": "8cb4d76f54f71d951c869cd2167c41a3cc2f747277a727412d7705b0f9adcea4",
+  "proof_receipt_digest": "473945fd7c10e363b8dca6977a79442d84d1634137f1d39fb9ac02e49d04c144",
+  "not_after": 1788927149.234226,
+  "mac": "6f339014aa456cdaf7a456bafdf29d11e08e9a0e039b90a45acce685182781da",
+  "issuer": "local_operator_promotion_authority",
+  "verified": true,
+  "secret_ref": "src/promotion_authority.py::LOCAL_OPERATOR_SECRET"
+}
