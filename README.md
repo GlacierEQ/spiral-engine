@@ -1,47 +1,128 @@
-# Spiral Engine — Rust Execution Kernel & Iterative Loop 🌀
+# Spiral Engine — Adaptive Compound Revolution Controller 🌀
 
-> **Rust spiral execution kernel implementing multi-pass iterative loops and state advances.**
+> **A deterministic feedback controller for compounding repository and system improvements without confusing motion with progress.**
 
-[![Rust](https://img.shields.io/badge/Rust-Safety%20Critical-orange)]()
-[![Python](https://img.shields.io/badge/Python-3.9+-blue)]()
-[![Domain](https://img.shields.io/badge/Domain-Spiral%20Engine-purple)]()
+The Spiral Engine accepts a measured state, an intervention chosen by an upstream
+optimizer, and the measured state after execution. It decides whether to
+**CONTINUE, REVISE, PROMOTE, COMPLETE, or CONSTRAIN** the next revolution.
 
----
+The engine is intentionally **domain- and language-blind**. The Tower of Babel can
+decide that memory belongs with Odin, logic with Rust, or action with TypeScript;
+Spiral decides whether the resulting intervention actually improved the system
+without creating a larger downstream loss.
 
-## 🎯 For Recruiters & Hiring Managers
+## Core loop
 
-This repository implements the **Spiral Engine** — a multi-pass iterative execution kernel written in Rust. It demonstrates:
+```text
+measured state before
+        ↓
+upstream intervention
+        ↓
+execute real mutation
+        ↓
+measured state after
+        ↓
+evaluate:
+  immediate gain
+  mid-term gain
+  far-term gain
+  capability
+  stability
+  risk
+  effort
+  reversibility
+  complexity
+  critical regressions
+        ↓
+CONTINUE / REVISE / PROMOTE / COMPLETE / CONSTRAIN
+        ↓
+SHA-256 chained revolution receipt
+        ↺
+```
 
-- **Rust state machine design** with safe mutable state transitions across passes
-- **Piston execution tracking** advancing multi-pass processing loops deterministically
-- **Zero-allocation pass transitions** ensuring predictable performance
-- **Python simulation test wrapper** verifying pass advancement and counter states
+## Stable owner + frontier specialist
 
-**Why this matters**: Iterative processing engines require strict state transition guarantees to prevent infinite loops and memory leaks during multi-stage execution.
+A specialization engine can preserve a stable production owner while proving a
+stronger frontier specialist. Spiral promotes that frontier only when the
+promotion evidence says it is:
 
----
+- executable;
+- behaviorally equivalent or better;
+- behind an explicit interface;
+- rollback-ready;
+- measurably better;
+- worth more than its interface cost;
+- free of critical regressions.
 
-## 🔬 For Engineers & Technical Reviewers
+This allows capability to expand without sacrificing stability.
 
-### Core Components
+## 9+ completion
 
-| Component | Language | Purpose |
-|---|---|---|
-| `src/spiral_kernel.rs` | Rust | Rust kernel struct and state advancement methods |
-| `tests/test_spiral_kernel.py` | Python | Test wrapper simulating multi-pass spiral execution |
+The default controller target is:
 
----
+- overall quality >= **9.0**;
+- critical quality floor >= **8.5**.
 
-## 🤖 ML/AI & Programmatic Mesh Integration
+A local score gain cannot hide a regression larger than the configured tolerance
+on a critical dimension. Repeated non-progress becomes **CONSTRAINED** rather
+than infinite-loop theater.
 
-- **MCP Tool**: `advance_spiral_pass()` — execution tool for iterative reasoning agents
-- **Mastermind Sidecar**: Fully connected to APEX Highway mesh
-- **SHA-256 Integrity**: Tracked in `.integrity/file_hashes.json`
+## Components
 
----
+| Component | Purpose |
+|---|---|
+| `src/spiral_kernel.rs` | Minimal Rust pass-index execution kernel |
+| `src/revolution_controller.py` | Adaptive multi-horizon revolution controller |
+| `src/feedback_loop.py` | Small pure before/after signal helper |
+| `src/promotion_authority.py` | Bound, short-lived promotion authority |
+| `src/spiral_engine.py` | Backward-compatible facade + v2 controller exposure |
+| `tests/test_revolution_controller.py` | Regression, promotion, completion, stagnation, receipt-chain tests |
 
-## ⚡ Quick Start
+## Python use
+
+```python
+from src import Impact, Intervention, QualityState, SpiralController
+
+controller = SpiralController()
+
+before = QualityState(
+    overall=8.1,
+    critical_floor=7.9,
+    dimensions={"correctness": 8.3, "testing": 8.0, "security": 7.9},
+    fingerprint="before",
+)
+after = QualityState(
+    overall=8.7,
+    critical_floor=8.4,
+    dimensions={"correctness": 8.9, "testing": 8.6, "security": 8.4},
+    fingerprint="after",
+)
+
+work = Intervention(
+    intervention_id="logic:rust",
+    title="focus Rust ownership of the safety-critical logic boundary",
+    impact=Impact(
+        near_term=.6,
+        mid_term=.7,
+        far_term=.8,
+        capability_gain=.8,
+        stability_gain=.9,
+        reversibility=.9,
+        risk=.2,
+        effort=.3,
+        complexity_delta=.1,
+    ),
+)
+
+receipt = controller.record(before, after, work)
+print(receipt.signal)
+```
+
+## Verification
 
 ```bash
-python3 tests/test_spiral_kernel.py
+python -m compileall -q src tests
+python -m unittest discover -s tests -p 'test_*.py' -v
 ```
+
+GitHub Actions runs the same suite and emits a chained revolution artifact.
