@@ -1,0 +1,64 @@
+name: Spiral Revolution Verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spiral-revolution-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Compile Python
+        run: python -m compileall -q src tests
+      - name: Run complete Python test suite
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Exercise revolution receipt chain
+        run: |
+          python - <<'PY'
+          from src.revolution_controller import (
+              Impact, Intervention, QualityState, SpiralController, verify_receipt_chain
+          )
+          def state(score, floor, fingerprint):
+              return QualityState(
+                  overall=score,
+                  critical_floor=floor,
+                  dimensions={
+                      "correctness": score,
+                      "testing": score,
+                      "security": floor,
+                      "semantic_placement": floor,
+                  },
+                  fingerprint=fingerprint,
+              )
+          intervention = Intervention(
+              "ci-revolution",
+              "CI proof revolution",
+              Impact(.5,.6,.7,.7,.8,.9,.1,.2,.05),
+          )
+          controller = SpiralController()
+          controller.record(state(7.5,7.2,"a"), state(8.1,7.8,"b"), intervention)
+          ok, reason = verify_receipt_chain(controller.receipts)
+          assert ok, reason
+          controller.write("revolution-logs/ci-revolution.json")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: spiral-revolution-receipt
+          path: revolution-logs/ci-revolution.json
+          if-no-files-found: error
+          retention-days: 14
