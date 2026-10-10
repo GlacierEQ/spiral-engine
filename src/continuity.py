@@ -53,21 +53,22 @@ def _load(raw: str) -> list[dict[str, Any]]:
 class ContinuityJournal:
     """Append-only, SHA-linked mission journal with explicit source authority."""
 
-    def __init__(self, path: Path | str, mission_id: str, objective: str):
-        if not mission_id.strip() or not objective.strip():
-            raise ValueError('mission identity and objective required')
+    def __init__(self, path: Path | str, mission_id: str, objective: str, *, terminal_outcome: str):
+        if not mission_id.strip() or not objective.strip() or not terminal_outcome.strip():
+            raise ValueError('mission identity, objective and terminal outcome required')
         self.path = Path(path)
         self.mission_id = mission_id
         self.objective = objective
+        self.terminal_outcome = terminal_outcome
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._events = _load(self.path.read_text('utf-8')) if self.path.exists() else []
         if self._events:
             first = self._events[0]
             if (first['kind'] != 'mission' or first['data'] !=
-                    {'mission_id': mission_id, 'objective': objective}):
+                    {'mission_id': mission_id, 'objective': objective, 'terminal_outcome': terminal_outcome}):
                 raise JournalIntegrityError('mission identity mismatch')
         else:
-            self._append('mission', mission_id=mission_id, objective=objective)
+            self._append('mission', mission_id=mission_id, objective=objective, terminal_outcome=terminal_outcome)
 
     def _append(self, kind: str, **data: Any) -> dict[str, Any]:
         with self.path.open('a+', encoding='utf-8') as handle:
@@ -181,11 +182,11 @@ class ContinuityJournal:
     def is_complete(self) -> bool:
         return bool(self._matching('mission_complete'))
 
-    def complete(self, provider_receipt: str) -> None:
-        if not provider_receipt:
-            raise ValueError('outcome must have source-native receipt')
+    def complete(self, provider_receipt: str, *, outcome_type: str) -> None:
+        if not provider_receipt or outcome_type != self.terminal_outcome:
+            raise ValueError('outcome type must match assigned mission and carry source-native receipt')
         if not self.is_complete:
-            self._append('mission_complete', provider_receipt=provider_receipt)
+            self._append('mission_complete', provider_receipt=provider_receipt, outcome_type=outcome_type)
 
 
 @dataclass(frozen=True)
@@ -193,6 +194,12 @@ class RouteResult:
     success: bool
     detail: str = ''
     receipt: str = ''
+
+
+@dataclass(frozen=True)
+class OutcomeEvidence:
+    outcome_type: str
+    receipt: str
 
 
 @dataclass(frozen=True)
@@ -214,7 +221,7 @@ class MissionRunner:
         self.journal = journal
 
     def run(self, routes: Iterable[str], perform: Callable[[str], RouteResult],
-            outcome_evidence: Callable[[ContinuityJournal], str | None],
+            outcome_evidence: Callable[[ContinuityJournal], OutcomeEvidence | None],
             *, max_attempts: int = 20) -> MissionRunResult:
         if max_attempts < 1:
             raise ValueError('max_attempts must be positive')
@@ -223,7 +230,7 @@ class MissionRunner:
         attempted: list[str] = []
         known = outcome_evidence(self.journal)
         if known:
-            self.journal.complete(known)
+            self.journal.complete(known.receipt, outcome_type=known.outcome_type)
             return MissionRunResult('COMPLETE', (), self.journal.cursor)
         for route in routes:
             if len(attempted) >= max_attempts:
@@ -239,7 +246,7 @@ class MissionRunner:
                                  receipt=result.receipt)
             evidence = outcome_evidence(self.journal)
             if evidence:
-                self.journal.complete(evidence)
+                self.journal.complete(evidence.receipt, outcome_type=evidence.outcome_type)
                 return MissionRunResult('COMPLETE', tuple(attempted), self.journal.cursor)
         self.journal.checkpoint('route-discovery', detail='Mission open; renew route plan from latest verified state')
         return MissionRunResult('RESUMABLE', tuple(attempted), self.journal.cursor)
