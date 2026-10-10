@@ -127,6 +127,15 @@ class SpiralEngine:
 
         def perform_route(route):
             before_improvement = observe_improvement() if improvement_contract is not None else None
+            if improvement_contract is not None:
+                from .improvement import ImprovementObservation
+                inherited_keys = {
+                    event["data"]["key"] for event in journal.events
+                    if event["kind"] in {"verified_fact", "superseded_fact"}
+                }
+                if (not isinstance(before_improvement, ImprovementObservation)
+                        or not inherited_keys.issubset(set(before_improvement.verified_facts))):
+                    raise ValueError("improvement observation omitted source-verified journal facts")
             before = evaluate()
             intervention = propose(route, before)
             if not isinstance(intervention, Intervention):
@@ -139,6 +148,14 @@ class SpiralEngine:
             journal.append_revolution(receipt)
             if improvement_contract is not None:
                 after_improvement = observe_improvement()
+                from .improvement import ImprovementObservation
+                inherited_after = {
+                    event["data"]["key"] for event in journal.events
+                    if event["kind"] in {"verified_fact", "superseded_fact"}
+                }
+                if (not isinstance(after_improvement, ImprovementObservation)
+                        or not inherited_after.issubset(set(after_improvement.verified_facts))):
+                    raise ValueError("improvement observation omitted source-verified journal facts")
                 assessment = evaluate_improvement(
                     improvement_contract, before_improvement, after_improvement,
                     verify_evidence=verify_improvement,
