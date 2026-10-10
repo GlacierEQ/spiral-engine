@@ -54,7 +54,8 @@ class ContinuityTests(unittest.TestCase):
             return OutcomeEvidence('PAID_EMPLOYMENT', 'employer:contract-456') if journal.route_succeeded('alternate-ats') else None
         result = MissionRunner(self.journal).run(
             routes=['greenhouse', 'alternate-ats'], perform=perform,
-            outcome_evidence=outcome)
+            outcome_evidence=outcome,
+            verify_outcome=lambda ev: ev.receipt == 'employer:contract-456')
         self.assertEqual(attempts, ['greenhouse', 'alternate-ats'])
         self.assertEqual(result.state, 'COMPLETE')
         self.assertTrue(ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT').is_complete)
@@ -73,7 +74,8 @@ class ContinuityTests(unittest.TestCase):
         runner = MissionRunner(self.journal)
         r1 = runner.run(['login'], lambda r: (seen.append(r), RouteResult(False, 'OTP missing'))[1], lambda _: None)
         self.assertEqual(r1.state, 'RESUMABLE')
-        r2 = runner.run(['login', 'new-provider'], lambda r: (seen.append(r), RouteResult(True, 'submitted', 'employer:receipt'))[1], lambda j: OutcomeEvidence('PAID_EMPLOYMENT', 'employment:contract') if j.route_succeeded('new-provider') else None)
+        r2 = runner.run(['login', 'new-provider'], lambda r: (seen.append(r), RouteResult(True, 'submitted', 'employer:receipt'))[1], lambda j: OutcomeEvidence('PAID_EMPLOYMENT', 'employment:contract') if j.route_succeeded('new-provider') else None,
+                        verify_outcome=lambda ev: ev.receipt == 'employment:contract')
         self.assertEqual(seen, ['login', 'new-provider'])
         self.assertEqual(r2.state, 'COMPLETE')
 
