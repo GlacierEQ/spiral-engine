@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -33,17 +34,26 @@ def _digest(data: Any) -> str:
     return hashlib.sha256(_encoded(data)).hexdigest()
 
 
-def _load(raw: str) -> list[dict[str, Any]]:
+def _load(raw: str, integrity_key: bytes | None = None) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     previous = ''
     for index, line in enumerate(raw.splitlines(), 1):
         try:
             event = json.loads(line)
+            auth_tag = event.pop('auth_tag', None)
             provided = event.pop('sha256')
             if (event['seq'] != index or event['previous_sha256'] != previous
                     or provided != _digest(event)):
                 raise JournalIntegrityError(f'broken event chain at {index}')
             event['sha256'] = provided
+            if integrity_key is not None:
+                expected = hmac.new(integrity_key, _encoded(event), hashlib.sha256).hexdigest()
+                if not isinstance(auth_tag, str) or not hmac.compare_digest(auth_tag, expected):
+                    raise JournalIntegrityError(f'authentication failed at event {index}')
+            elif auth_tag is not None:
+                raise JournalIntegrityError('authenticated history requires original integrity key')
+            if auth_tag is not None:
+                event['auth_tag'] = auth_tag
         except (AttributeError, KeyError, TypeError, ValueError) as exc:
             raise JournalIntegrityError(f'invalid event at {index}') from exc
         events.append(event)
@@ -54,15 +64,19 @@ def _load(raw: str) -> list[dict[str, Any]]:
 class ContinuityJournal:
     """Append-only, SHA-linked mission journal with explicit source authority."""
 
-    def __init__(self, path: Path | str, mission_id: str, objective: str, *, terminal_outcome: str):
+    def __init__(self, path: Path | str, mission_id: str, objective: str, *,
+                 terminal_outcome: str, integrity_key: bytes | None = None):
         if not mission_id.strip() or not objective.strip() or not terminal_outcome.strip():
             raise ValueError('mission identity, objective and terminal outcome required')
         self.path = Path(path)
         self.mission_id = mission_id
         self.objective = objective
         self.terminal_outcome = terminal_outcome
+        if integrity_key is not None and (not isinstance(integrity_key, bytes) or len(integrity_key) < 16):
+            raise ValueError('journal authentication key must contain at least 16 bytes')
+        self.integrity_key = integrity_key
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._events = _load(self.path.read_text('utf-8')) if self.path.exists() else []
+        self._events = _load(self.path.read_text('utf-8'), self.integrity_key) if self.path.exists() else []
         if self._events:
             first = self._events[0]
             if (first['kind'] != 'mission' or first['data'] !=
@@ -78,7 +92,7 @@ class ContinuityJournal:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
                 handle.seek(0)
-                current = _load(handle.read())
+                current = _load(handle.read(), self.integrity_key)
                 expected = {'mission_id': self.mission_id,
                             'objective': self.objective,
                             'terminal_outcome': self.terminal_outcome}
@@ -117,6 +131,8 @@ class ContinuityJournal:
                     'previous_sha256': current[-1]['sha256'] if current else '',
                 }
                 event['sha256'] = _digest(event)
+                if self.integrity_key is not None:
+                    event['auth_tag'] = hmac.new(self.integrity_key, _encoded(event), hashlib.sha256).hexdigest()
                 handle.seek(0, os.SEEK_END)
                 handle.write(_encoded(event).decode('utf-8') + '\n')
                 handle.flush()
