@@ -126,3 +126,45 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 GitHub Actions runs the same suite and emits a chained revolution artifact.
+
+
+## Original engine + integrated mission continuity
+
+The original measured feedback controller, quality policy, promotion authority,
+Rust kernel, and legacy `SpiralEngine` facade are **preserved**. These now work
+with a durable mission execution layer; this extends the existing product.
+
+| Existing behavior (preserved) | Added capability |
+|---|---|
+| Measure before/after quality and downstream effect | Retain each revolution across sessions |
+| `CONTINUE`, `REVISE`, `PROMOTE`, `COMPLETE`, `CONSTRAINED` feedback | Separate quality-level `COMPLETE` from mission-outcome completion |
+| Promotion and regression decisions | Terminal outcome requires matching type and independent provider verification |
+| SHA-256-chained revolution receipts | Append-only mission history with optional independent HMAC authentication |
+| Existing facade APIs and intervention execution | `SpiralEngine.run_mission()` joins routes, feedback and durable resumption |
+| Testable intervention executor | Record attempts before external work; reconcile uncertainty instead of replaying |
+
+### Operational contract
+
+1. Open a `ContinuityJournal` for the exact assigned mission and terminal human outcome.
+2. Supply an independently protected `integrity_key` to authenticate history. Without a separate key, a SHA-256 chain detects accidental corruption but does not prevent deliberate rewriting. Store the key outside Git and logs and retain it across sessions.
+3. Supply real provider adapters to measure quality, propose the original `Intervention`, execute an action, retrieve outcome evidence, and independently verify that outcome. A textual receipt reference is not automatically proof.
+4. Call `SpiralEngine.run_mission(journal, routes=..., evaluate=..., propose=..., execute=..., outcome_evidence=..., verify_outcome=...)`.
+5. The original quality controller emits its unaltered feedback receipts. The journal preserves them along with facts, corrections, hierarchical tasks and continuation cursor. Reaching quality 9+ does not finish an employment, court or deployment mission.
+6. Resume with the same mission ID, objective, outcome and integrity key. The controller restores its previous measured revolution chain. A route interrupted after an external side effect must be reconciled with the provider before a new intentional attempt; the same route is not blindly replayed.
+7. Deployment and observation of the assigned external outcome remain explicit goals; a passing test, generated document or merged PR is not equivalent to that outcome.
+
+The action callback `execute(route, intervention)` must return `RouteResult`.
+The `verify_outcome(OutcomeEvidence) -> bool` callback is required before
+final mission completion. Implement it using authoritative provider readback,
+never an unconditional `True` or fabricated receipt. Source-backed facts
+should be inherited until genuinely superseded by newer authoritative evidence.
+
+### Full regression checks
+
+```bash
+python -m compileall -q src tests
+python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+GitHub Actions executes this suite and publishes a revolution proof artifact.
+Tests demonstrate program behavior, not an external employer, court, or deployment result.
