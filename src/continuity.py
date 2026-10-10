@@ -43,7 +43,7 @@ def _load(raw: str) -> list[dict[str, Any]]:
                     or provided != _digest(event)):
                 raise JournalIntegrityError(f'broken event chain at {index}')
             event['sha256'] = provided
-        except (KeyError, TypeError, ValueError) as exc:
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
             raise JournalIntegrityError(f'invalid event at {index}') from exc
         events.append(event)
         previous = provided
@@ -71,14 +71,23 @@ class ContinuityJournal:
             self._append('mission', mission_id=mission_id, objective=objective, terminal_outcome=terminal_outcome)
 
     def _append(self, kind: str, **data: Any) -> dict[str, Any]:
+        if fcntl is None:
+            raise OSError('safe concurrent journal append requires fcntl; no unsafe unlocked fallback')
         with self.path.open('a+', encoding='utf-8') as handle:
-            if fcntl is not None:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
                 handle.seek(0)
                 current = _load(handle.read())
-                if current and self._events and current[0]['sha256'] != self._events[0]['sha256']:
-                    raise JournalIntegrityError('mission journal changed')
+                expected = {'mission_id': self.mission_id,
+                            'objective': self.objective,
+                            'terminal_outcome': self.terminal_outcome}
+                if current and (current[0]['kind'] != 'mission' or
+                                current[0]['data'] != expected):
+                    raise JournalIntegrityError('journal identity changed')
+                if (len(current) < len(self._events) or
+                    any(old['sha256'] != actual['sha256']
+                        for old, actual in zip(self._events, current))):
+                    raise JournalIntegrityError('journal lost or replaced previously observed events')
                 event = {
                     'seq': len(current) + 1, 'kind': kind, 'data': data,
                     'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -111,7 +120,7 @@ class ContinuityJournal:
         return history[-1]['data'] if history else None
 
     def verify_fact(self, key: str, value: Any, *, source: str, revision: str = '') -> None:
-        if not key or not source:
+        if not key.strip() or not source.strip():
             raise ValueError('fact and source reference required')
         prior = self.fact(key)
         if prior:
@@ -122,7 +131,7 @@ class ContinuityJournal:
 
     def supersede_fact(self, key: str, value: Any, *, source: str, revision: str = '') -> None:
         prior = self.fact_history(key)
-        if not prior or not source:
+        if not prior or not source.strip():
             raise ValueError('prior verified fact and new source required')
         old = max(prior, key=lambda x: x['seq'])
         self._append('superseded_fact', key=key, value=value, source=source,
@@ -153,7 +162,7 @@ class ContinuityJournal:
             self._append('task_defined', task_id=task_id, title=title, parent=parent)
 
     def complete_task(self, task_id: str, receipt: str) -> None:
-        if not receipt or not any(e['data'].get('task_id') == task_id for e in self._matching('task_defined')):
+        if not receipt.strip() or not any(e['data'].get('task_id') == task_id for e in self._matching('task_defined')):
             raise ValueError('defined task and completion receipt required')
         if not self.task_is_complete(task_id):
             self._append('task_completed', task_id=task_id, receipt=receipt)
@@ -183,7 +192,7 @@ class ContinuityJournal:
         return bool(self._matching('mission_complete'))
 
     def complete(self, provider_receipt: str, *, outcome_type: str) -> None:
-        if not provider_receipt or outcome_type != self.terminal_outcome:
+        if not provider_receipt.strip() or outcome_type != self.terminal_outcome:
             raise ValueError('outcome type must match assigned mission and carry source-native receipt')
         if not self.is_complete:
             self._append('mission_complete', provider_receipt=provider_receipt, outcome_type=outcome_type)
@@ -228,8 +237,13 @@ class MissionRunner:
         if self.journal.is_complete:
             return MissionRunResult('COMPLETE', (), self.journal.cursor)
         attempted: list[str] = []
+        def matches_terminal(evidence: OutcomeEvidence | None) -> bool:
+            return bool(isinstance(evidence, OutcomeEvidence) and
+                        evidence.outcome_type == self.journal.terminal_outcome and
+                        evidence.receipt.strip())
+
         known = outcome_evidence(self.journal)
-        if known:
+        if matches_terminal(known):
             self.journal.complete(known.receipt, outcome_type=known.outcome_type)
             return MissionRunResult('COMPLETE', (), self.journal.cursor)
         for route in routes:
@@ -241,11 +255,11 @@ class MissionRunner:
             if not isinstance(result, RouteResult):
                 raise TypeError('perform must return RouteResult')
             attempted.append(route)
-            kind = 'route_succeeded' if result.success and result.receipt else 'route_failed'
+            kind = 'route_succeeded' if result.success and result.receipt.strip() else 'route_failed'
             self.journal._append(kind, route=route, detail=result.detail,
                                  receipt=result.receipt)
             evidence = outcome_evidence(self.journal)
-            if evidence:
+            if matches_terminal(evidence):
                 self.journal.complete(evidence.receipt, outcome_type=evidence.outcome_type)
                 return MissionRunResult('COMPLETE', tuple(attempted), self.journal.cursor)
         self.journal.checkpoint('route-discovery', detail='Mission open; renew route plan from latest verified state')
