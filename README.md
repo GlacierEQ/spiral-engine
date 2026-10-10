@@ -118,6 +118,23 @@ receipt = controller.record(before, after, work)
 print(receipt.signal)
 ```
 
+## Mission-grounded improvement: know what better means
+
+The Operator's full intended outcome is the definition of success. Quality
+scores alone are feedback and may **never** redefine a mission's goal.
+
+The additive `ImprovementContract` and `evaluate_improvement` system can
+bind outcome/capability/integrity criteria to a mission, detect lost prior
+capabilities and verified facts, and require independent evidence for gains.
+`SpiralEngine.run_mission` accepts optional instrumented observations and
+saves assessment receipts into the existing `ContinuityJournal`. Legacy
+calls retain existing behavior and cannot claim a verified improvement merely
+because a local quality score crossed its configured threshold.
+
+See [Mission-Bound Improvement Contract](docs/MISSION_BOUND_IMPROVEMENT.md)
+for inheritance, provider proof, counter-mold regression tests and remaining
+host-runtime integration work.
+
 ## Verification
 
 ```bash
