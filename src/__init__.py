@@ -11,10 +11,16 @@ from .revolution_controller import (
     decide_revolution,
     verify_receipt_chain,
 )
+from .improvement import (ImprovementContract, ImprovementCriterion, ImprovementObservation, ImprovementAssessment, evaluate_improvement)
 from .continuity import (ContinuityJournal, JournalIntegrityError, MissionRunner, MissionRunResult, OutcomeEvidence, RouteResult)
 from .spiral_engine import SpiralEngine
 
 __all__ = [
+    "ImprovementContract",
+    "ImprovementCriterion",
+    "ImprovementObservation",
+    "ImprovementAssessment",
+    "evaluate_improvement",
     "ContinuityJournal",
     "JournalIntegrityError",
     "MissionRunner",

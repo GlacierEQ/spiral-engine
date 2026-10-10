@@ -243,6 +243,26 @@ class ContinuityJournal:
         self._append('revolution_receipt', receipt=asdict(receipt))
 
     @property
+    def improvement_history(self):
+        """Recover proven or disputed improvement assessments across sessions."""
+        from .improvement import ImprovementAssessment
+        values = tuple(ImprovementAssessment(**deepcopy(e['data']['assessment']))
+                       for e in self._matching('improvement_assessment'))
+        if not all(value.verify() for value in values):
+            raise JournalIntegrityError('invalid improvement assessment proof')
+        return values
+
+    def record_improvement(self, assessment) -> None:
+        """Append an assessment without conflating it with mission completion."""
+        from .improvement import ImprovementAssessment
+        if not isinstance(assessment, ImprovementAssessment) or not assessment.verify():
+            raise ValueError('verified improvement assessment structure required')
+        if (assessment.mission_id, assessment.objective, assessment.terminal_outcome) != (
+                self.mission_id, self.objective, self.terminal_outcome):
+            raise ValueError('improvement assessment belongs to a different mission')
+        self._append('improvement_assessment', assessment=asdict(assessment))
+
+    @property
     def is_complete(self) -> bool:
         return bool(self._matching('mission_complete'))
 
