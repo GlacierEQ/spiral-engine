@@ -213,6 +213,33 @@ class ImprovementContractTests(unittest.TestCase):
             self.assertEqual(journal.improvement_history[-1].state, "IMPROVED")
             self.assertFalse(journal.is_complete)
 
+    def test_journal_verified_facts_cannot_be_omitted_from_improvement_baseline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = ContinuityJournal(
+                Path(tmp) / "mission.jsonl",
+                "employment", "Obtain paid AI engineering employment",
+                terminal_outcome="PAID_EMPLOYMENT",
+            )
+            journal.verify_fact("application-received", "yes", source="employer:receipt")
+            attempted = []
+            state = QualityState(8.0, 8.0, {"correctness": 8.0})
+            with self.assertRaises(ValueError):
+                SpiralEngine().run_mission(
+                    journal, routes=("next",),
+                    evaluate=lambda: state,
+                    propose=lambda r, s: Intervention(
+                        r, "Advance real goal", Impact(.7,.7,.7,.7,.7,.7,.1,.2,0)),
+                    execute=lambda r, i: (attempted.append(r), RouteResult(True, receipt="provider:next"))[1],
+                    outcome_evidence=lambda j: None,
+                    verify_outcome=lambda ev: False,
+                    improvement_contract=contract(),
+                    observe_improvement=lambda: observation(facts=()),
+                    verify_improvement=native_verify,
+                )
+            self.assertEqual(attempted, [])
+            self.assertEqual(journal.fact("application-received")["value"], "yes")
+            self.assertFalse(journal.is_complete)
+
     def test_incomplete_improvement_configuration_rejected_before_mutation(self):
         with tempfile.TemporaryDirectory() as tmp:
             journal = ContinuityJournal(
