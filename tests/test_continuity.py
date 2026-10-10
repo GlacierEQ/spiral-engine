@@ -34,12 +34,12 @@ class ContinuityTests(unittest.TestCase):
         text = self.file.read_text()
         self.file.write_text(text.replace('"value":1', '"value":2'))
         with self.assertRaises(JournalIntegrityError):
-            ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role')
+            ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
 
     def test_correction_and_resume_cursor_survive_restart(self):
         self.journal.correct('Never confuse a prepared application with submitted.')
         self.journal.checkpoint('ats:challenge', detail='Route A cannot continue; seek independent route')
-        recovered = ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role')
+        recovered = ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
         self.assertIn('Never confuse', recovered.corrections[0])
         self.assertEqual(recovered.cursor, 'ats:challenge')
 
@@ -57,7 +57,7 @@ class ContinuityTests(unittest.TestCase):
             outcome_evidence=outcome)
         self.assertEqual(attempts, ['greenhouse', 'alternate-ats'])
         self.assertEqual(result.state, 'COMPLETE')
-        self.assertTrue(ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role').is_complete)
+        self.assertTrue(ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT').is_complete)
 
     def test_successful_activity_does_not_imply_mission_completion(self):
         result = MissionRunner(self.journal).run(
