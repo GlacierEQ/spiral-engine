@@ -96,6 +96,51 @@ class ContinuityTests(unittest.TestCase):
         with self.assertRaises(JournalIntegrityError):
             ContinuityJournal(self.file, 'different-mission', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
 
+    def test_malformed_scalar_journal_fails_with_integrity_error(self):
+        self.file.write_text('1\n')
+        with self.assertRaises(JournalIntegrityError):
+            ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
+
+    def test_replaced_journal_does_not_allow_injected_mission(self):
+        other_file = Path(self.tmp.name) / 'other.jsonl'
+        other = ContinuityJournal(other_file, 'different', 'Different goal', terminal_outcome='DIFFERENT')
+        self.file.write_bytes(other_file.read_bytes())
+        with self.assertRaises(JournalIntegrityError):
+            self.journal.verify_fact('foo', 'bar', source='provider:abc')
+
+    def test_rollback_of_existing_journal_detected_on_append(self):
+        self.journal.verify_fact('fact', 'value', source='provider:first')
+        self.journal.checkpoint('next')
+        self.file.write_text('\n'.join(self.file.read_text().splitlines()[:1]) + '\n')
+        with self.assertRaises(JournalIntegrityError):
+            self.journal.correct('Do not lose my progress')
+
+    def test_whitespace_receipts_do_not_satisfy_completion(self):
+        with self.assertRaises(ValueError):
+            self.journal.complete('   ', outcome_type='PAID_EMPLOYMENT')
+        self.journal.define_task('a', 'a')
+        with self.assertRaises(ValueError):
+            self.journal.complete_task('a', '  ')
+
+    def test_blank_outcome_evidence_does_not_complete_or_abort_routes(self):
+        completed = MissionRunner(self.journal).run(
+            routes=['one', 'two'],
+            perform=lambda _: RouteResult(True, receipt='provider:route'),
+            outcome_evidence=lambda _: OutcomeEvidence('PAID_EMPLOYMENT', '   '),
+        )
+        self.assertEqual(completed.state, 'RESUMABLE')
+        self.assertEqual(completed.attempted, ('one', 'two'))
+        self.assertFalse(self.journal.is_complete)
+
+    def test_mismatched_outcome_evidence_does_not_end_mission(self):
+        result = MissionRunner(self.journal).run(
+            routes=['ats', 'recruiter'],
+            perform=lambda _: RouteResult(True, receipt='provider:receipt'),
+            outcome_evidence=lambda _: OutcomeEvidence('APPLICATION_RECEIVED', 'provider:receipt'),
+        )
+        self.assertEqual(result.state, 'RESUMABLE')
+        self.assertFalse(self.journal.is_complete)
+
     def test_durable_tree_needs_task_receipt(self):
         self.journal.define_task('application', 'Submit to employer', parent=None)
         self.journal.define_task('confirmation', 'Read employer confirmation', parent='application')
