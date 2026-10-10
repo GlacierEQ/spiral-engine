@@ -6,7 +6,8 @@ A quality score or a successful intermediate artifact never completes a mission.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -88,8 +89,30 @@ class ContinuityJournal:
                     any(old['sha256'] != actual['sha256']
                         for old, actual in zip(self._events, current))):
                     raise JournalIntegrityError('journal lost or replaced previously observed events')
+                if kind == 'mission' and current:
+                    self._events = current
+                    return current[0]
+                if kind == 'verified_fact':
+                    existing = [e for e in current if e['kind'] in {'verified_fact', 'superseded_fact'}
+                                and e['data']['key'] == data['key']]
+                    if existing:
+                        if existing[-1]['data']['value'] != data['value']:
+                            raise ValueError('verified facts require explicit supersession')
+                        self._events = current
+                        return existing[-1]
+                if kind == 'superseded_fact':
+                    history = [e for e in current if e['kind'] in {'verified_fact', 'superseded_fact'}
+                               and e['data']['key'] == data['key']]
+                    if not history or history[-1]['sha256'] != data['supersedes']:
+                        raise JournalIntegrityError('supersession precondition changed; reconcile first')
+                if kind == 'revolution_receipt':
+                    previous = [e for e in current if e['kind'] == 'revolution_receipt']
+                    expected = previous[-1]['data']['receipt']['receipt_sha256'] if previous else ''
+                    provided = data['receipt']['previous_receipt_sha256']
+                    if provided != expected or data['receipt']['revolution'] != len(previous) + 1:
+                        raise JournalIntegrityError('revolution chain does not extend current head')
                 event = {
-                    'seq': len(current) + 1, 'kind': kind, 'data': data,
+                    'seq': len(current) + 1, 'kind': kind, 'data': deepcopy(data),
                     'timestamp': datetime.now(timezone.utc).isoformat(),
                     'previous_sha256': current[-1]['sha256'] if current else '',
                 }
@@ -106,18 +129,18 @@ class ContinuityJournal:
 
     @property
     def events(self) -> tuple[dict[str, Any], ...]:
-        return tuple(self._events)
+        return tuple(deepcopy(self._events))
 
     def _matching(self, kind: str, key: str | None = None) -> list[dict[str, Any]]:
         return [e for e in self._events if e['kind'] == kind and
                 (key is None or e['data'].get('key', e['data'].get('task_id')) == key)]
 
     def fact_history(self, key: str) -> list[dict[str, Any]]:
-        return self._matching('verified_fact', key) + self._matching('superseded_fact', key)
+        return deepcopy(self._matching('verified_fact', key) + self._matching('superseded_fact', key))
 
     def fact(self, key: str) -> dict[str, Any] | None:
         history = sorted(self.fact_history(key), key=lambda x: x['seq'])
-        return history[-1]['data'] if history else None
+        return deepcopy(history[-1]['data']) if history else None
 
     def verify_fact(self, key: str, value: Any, *, source: str, revision: str = '') -> None:
         if not key.strip() or not source.strip():
@@ -143,7 +166,7 @@ class ContinuityJournal:
         self._append('fact_conflict', key=key, alternative=alternative, source=source)
 
     def conflicts(self, key: str) -> list[dict[str, Any]]:
-        return [e['data'] for e in self._matching('fact_conflict', key)]
+        return deepcopy([e['data'] for e in self._matching('fact_conflict', key)])
 
     def correct(self, instruction: str) -> None:
         if not instruction.strip():
@@ -181,19 +204,39 @@ class ContinuityJournal:
         return history[-1]['data']['cursor'] if history else ''
 
     def route_attempted(self, route: str) -> bool:
-        return any(e['kind'] in {'route_succeeded', 'route_failed'} and
+        return any(e['kind'] in {'route_started', 'route_succeeded', 'route_failed'} and
                    e['data']['route'] == route for e in self._events)
 
     def route_succeeded(self, route: str) -> bool:
         return any(e['data']['route'] == route for e in self._matching('route_succeeded'))
 
     @property
+    def revolution_receipts(self):
+        from .revolution_controller import RevolutionReceipt, verify_receipt_chain
+        values = tuple(RevolutionReceipt(**deepcopy(e['data']['receipt']))
+                       for e in self._matching('revolution_receipt'))
+        valid, reason = verify_receipt_chain(values)
+        if not valid:
+            raise JournalIntegrityError(f'invalid persisted revolution proof: {reason}')
+        return values
+
+    def append_revolution(self, receipt) -> None:
+        from .revolution_controller import RevolutionReceipt
+        if not isinstance(receipt, RevolutionReceipt) or not receipt.verify():
+            raise ValueError('a verified revolution receipt is required')
+        self._append('revolution_receipt', receipt=asdict(receipt))
+
+    @property
     def is_complete(self) -> bool:
         return bool(self._matching('mission_complete'))
 
-    def complete(self, provider_receipt: str, *, outcome_type: str) -> None:
-        if not provider_receipt.strip() or outcome_type != self.terminal_outcome:
+    def complete(self, provider_receipt: str, *, outcome_type: str,
+                 verifier: Callable[[OutcomeEvidence], bool] | None = None) -> None:
+        if not isinstance(provider_receipt, str) or not provider_receipt.strip() or outcome_type != self.terminal_outcome:
             raise ValueError('outcome type must match assigned mission and carry source-native receipt')
+        evidence = OutcomeEvidence(outcome_type, provider_receipt)
+        if verifier is None or not verifier(evidence):
+            raise ValueError('independent terminal outcome verification required')
         if not self.is_complete:
             self._append('mission_complete', provider_receipt=provider_receipt, outcome_type=outcome_type)
 
@@ -231,7 +274,8 @@ class MissionRunner:
 
     def run(self, routes: Iterable[str], perform: Callable[[str], RouteResult],
             outcome_evidence: Callable[[ContinuityJournal], OutcomeEvidence | None],
-            *, max_attempts: int = 20) -> MissionRunResult:
+            *, max_attempts: int = 20,
+            verify_outcome: Callable[[OutcomeEvidence], bool] | None = None) -> MissionRunResult:
         if max_attempts < 1:
             raise ValueError('max_attempts must be positive')
         if self.journal.is_complete:
@@ -240,17 +284,26 @@ class MissionRunner:
         def matches_terminal(evidence: OutcomeEvidence | None) -> bool:
             return bool(isinstance(evidence, OutcomeEvidence) and
                         evidence.outcome_type == self.journal.terminal_outcome and
-                        evidence.receipt.strip())
+                        evidence.receipt.strip() and verify_outcome is not None
+                        and verify_outcome(evidence))
 
         known = outcome_evidence(self.journal)
         if matches_terminal(known):
-            self.journal.complete(known.receipt, outcome_type=known.outcome_type)
+            self.journal.complete(known.receipt, outcome_type=known.outcome_type,
+                                  verifier=verify_outcome)
             return MissionRunResult('COMPLETE', (), self.journal.cursor)
-        for route in routes:
+        # Finite scan budget also bounds infinite streams of already-attempted routes.
+        from itertools import islice
+        for route in islice(routes, max_attempts * 10):
             if len(attempted) >= max_attempts:
                 break
             if self.journal.route_attempted(route):
                 continue
+            # Persist the attempt BEFORE touching an external provider. On crash,
+            # reconciliation must establish the external result before any replay.
+            self.journal._append('route_started', route=route,
+                                 idempotency_key=_digest({'mission': self.journal.mission_id,
+                                                          'route': route}))
             result = perform(route)
             if not isinstance(result, RouteResult):
                 raise TypeError('perform must return RouteResult')
@@ -260,7 +313,8 @@ class MissionRunner:
                                  receipt=result.receipt)
             evidence = outcome_evidence(self.journal)
             if matches_terminal(evidence):
-                self.journal.complete(evidence.receipt, outcome_type=evidence.outcome_type)
+                self.journal.complete(evidence.receipt, outcome_type=evidence.outcome_type,
+                                      verifier=verify_outcome)
                 return MissionRunResult('COMPLETE', tuple(attempted), self.journal.cursor)
         self.journal.checkpoint('route-discovery', detail='Mission open; renew route plan from latest verified state')
         return MissionRunResult('RESUMABLE', tuple(attempted), self.journal.cursor)
