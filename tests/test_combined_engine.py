@@ -126,6 +126,33 @@ class CombinedEngineTests(unittest.TestCase):
             other.verify_fact("status", "rejected", source="provider:2")
         self.assertEqual(self.journal.fact("status")["value"], "submitted")
 
+    def test_authenticated_journal_rejects_rehashed_external_history_tampering(self):
+        import hashlib
+        import json
+        from src.continuity import _digest
+        protected = self.path.parent / "protected.jsonl"
+        key = b"long-independent-journal-secret-for-test-only"
+        journal = ContinuityJournal(
+            protected, "job", "Obtain paid engineering employment",
+            terminal_outcome="PAID_EMPLOYMENT", integrity_key=key)
+        journal.verify_fact("application", {"status": "received"},
+                            source="employer:receipt-123")
+        rows = [json.loads(line) for line in protected.read_text().splitlines()]
+        rows[1]["data"]["value"] = {"status": "rejected"}
+        # A malicious editor can recompute ordinary SHA chains. The independent
+        # authentication secret MUST still detect this rewrite.
+        for index, row in enumerate(rows):
+            row["previous_sha256"] = rows[index - 1]["sha256"] if index else ""
+            body = {k: v for k, v in row.items() if k not in ("sha256", "auth_tag")}
+            row["sha256"] = _digest(body)
+        protected.write_text("".join(json.dumps(row) + "\n" for row in rows))
+        with self.assertRaises(JournalIntegrityError):
+            ContinuityJournal(protected, "job", "Obtain paid engineering employment",
+                              terminal_outcome="PAID_EMPLOYMENT", integrity_key=key)
+        with self.assertRaises(JournalIntegrityError):
+            ContinuityJournal(protected, "job", "Obtain paid engineering employment",
+                              terminal_outcome="PAID_EMPLOYMENT")
+
     def test_crash_does_not_automatically_replay_external_mutation(self):
         attempted = []
         def fail(route):
