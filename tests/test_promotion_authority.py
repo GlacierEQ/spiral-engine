@@ -17,7 +17,7 @@ class PromotionAuthTests(unittest.TestCase):
         ok, r = a.verify(g, now=2000.0)
         self.assertFalse(ok)
         self.assertEqual(r, "GRANT_EXPIRED")
-    def test_real_machine_grant_verifies_against_proof_receipt(self):
+    def test_historical_machine_grant_signature_and_current_expiry(self):
         grant_path = ROOT / "machine" / "promotion_authority.json"
         proof_path = ROOT / "machine" / "proof_receipt.json"
         if not grant_path.is_file() or not proof_path.is_file():
@@ -27,7 +27,16 @@ class PromotionAuthTests(unittest.TestCase):
         file_digest = hashlib.sha256(proof_path.read_bytes()).hexdigest()
         self.assertEqual(grant["proof_receipt_digest"], file_digest)
         self.assertEqual(grant["source_sha"], proof["source_sha"])
-        ok, reason = verify_bound_grant(grant, proof_path, secret=LOCAL_OPERATOR_SECRET)
+        # Reproduce historical cryptographic validity at a fixed instant within
+        # the signed grant's time window, without renewing real authority.
+        historical_instant = float(grant['not_after']) - 1.0
+        ok, reason = verify_bound_grant(grant, proof_path,
+                                        secret=LOCAL_OPERATOR_SECRET, now=historical_instant)
         self.assertTrue(ok, reason)
+        expired, reason = verify_bound_grant(grant, proof_path,
+                                             secret=LOCAL_OPERATOR_SECRET,
+                                             now=float(grant['not_after']) + 1.0)
+        self.assertFalse(expired)
+        self.assertEqual(reason, 'GRANT_EXPIRED')
 if __name__ == "__main__":
     unittest.main()

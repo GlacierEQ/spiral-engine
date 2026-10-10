@@ -399,6 +399,30 @@ class SpiralController:
 
         return self.receipts
 
+    def restore(self, receipts: Sequence[RevolutionReceipt]) -> None:
+        """Resume an existing verified chain without fabricating new revolutions.
+
+        A live controller cannot silently discard its already-recorded receipts.
+        """
+        valid, reason = verify_receipt_chain(receipts)
+        if not valid:
+            raise ValueError(f"invalid historical revolution receipts: {reason}")
+        if self._receipts and tuple(self._receipts) != tuple(receipts):
+            raise ValueError("cannot replace an active controller history")
+        if self._receipts:
+            return
+        self._receipts = list(receipts)
+        streak = 0
+        for receipt in self._receipts:
+            if receipt.signal == "CONSTRAINED" or (
+                receipt.signal == "REVISE"
+                and receipt.score_delta < self.policy.min_progress
+            ):
+                streak += 1
+            else:
+                streak = 0
+        self._stagnation = streak
+
     def export(self) -> dict[str, Any]:
         receipts = [asdict(receipt) for receipt in self._receipts]
         return {
