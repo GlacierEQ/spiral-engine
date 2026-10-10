@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.continuity import ContinuityJournal, MissionRunner, RouteResult, JournalIntegrityError
+from src.continuity import ContinuityJournal, MissionRunner, RouteResult, OutcomeEvidence, JournalIntegrityError
 
 
 class ContinuityTests(unittest.TestCase):
@@ -11,12 +11,12 @@ class ContinuityTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.file = Path(self.tmp.name) / 'mission.jsonl'
-        self.journal = ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role')
+        self.journal = ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
 
     def test_verified_fact_survives_restart_and_unverified_conflict(self):
         self.journal.verify_fact('application', 'received', source='employer:receipt-123', revision='A')
         self.journal.note_conflict('application', 'maybe rejected', source='assistant-summary')
-        recovered = ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role')
+        recovered = ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
         self.assertEqual(recovered.fact('application')['value'], 'received')
         self.assertTrue(recovered.conflicts('application'))
         self.assertFalse(recovered.is_complete)
@@ -51,7 +51,7 @@ class ContinuityTests(unittest.TestCase):
                 return RouteResult(success=False, detail='login challenge')
             return RouteResult(success=True, receipt='employer:application-456')
         def outcome(journal):
-            return 'employer:application-456' if journal.route_succeeded('alternate-ats') else None
+            return OutcomeEvidence('PAID_EMPLOYMENT', 'employer:contract-456') if journal.route_succeeded('alternate-ats') else None
         result = MissionRunner(self.journal).run(
             routes=['greenhouse', 'alternate-ats'], perform=perform,
             outcome_evidence=outcome)
@@ -73,18 +73,28 @@ class ContinuityTests(unittest.TestCase):
         runner = MissionRunner(self.journal)
         r1 = runner.run(['login'], lambda r: (seen.append(r), RouteResult(False, 'OTP missing'))[1], lambda _: None)
         self.assertEqual(r1.state, 'RESUMABLE')
-        r2 = runner.run(['login', 'new-provider'], lambda r: (seen.append(r), RouteResult(True, 'submitted', 'employer:receipt'))[1], lambda j: 'employer:receipt' if j.route_succeeded('new-provider') else None)
+        r2 = runner.run(['login', 'new-provider'], lambda r: (seen.append(r), RouteResult(True, 'submitted', 'employer:receipt'))[1], lambda j: OutcomeEvidence('PAID_EMPLOYMENT', 'employment:contract') if j.route_succeeded('new-provider') else None)
         self.assertEqual(seen, ['login', 'new-provider'])
         self.assertEqual(r2.state, 'COMPLETE')
 
     def test_no_outcome_without_provider_receipt(self):
         with self.assertRaises(ValueError):
-            self.journal.complete('')
+            self.journal.complete('', outcome_type='PAID_EMPLOYMENT')
+        self.assertFalse(self.journal.is_complete)
+
+    def test_application_receipt_is_not_paid_job_completion(self):
+        with self.assertRaises(ValueError):
+            self.journal.complete('greenhouse:received', outcome_type='APPLICATION_RECEIVED')
+        self.assertFalse(self.journal.is_complete)
+
+    def test_untyped_outcome_does_not_complete_mission(self):
+        with self.assertRaises((TypeError, ValueError)):
+            self.journal.complete('untyped receipt')
         self.assertFalse(self.journal.is_complete)
 
     def test_mission_identity_is_immutable(self):
         with self.assertRaises(JournalIntegrityError):
-            ContinuityJournal(self.file, 'different-mission', 'Get a paid AI engineering role')
+            ContinuityJournal(self.file, 'different-mission', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
 
     def test_durable_tree_needs_task_receipt(self):
         self.journal.define_task('application', 'Submit to employer', parent=None)
