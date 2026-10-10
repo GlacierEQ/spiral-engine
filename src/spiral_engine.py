@@ -87,6 +87,9 @@ class SpiralEngine:
         outcome_evidence,
         verify_outcome,
         max_attempts: int = 20,
+        improvement_contract=None,
+        observe_improvement=None,
+        verify_improvement=None,
     ):
         """Run the ORIGINAL measured controller inside durable mission execution.
 
@@ -100,6 +103,19 @@ class SpiralEngine:
         except ImportError:
             from continuity import MissionRunner, RouteResult
 
+        from .improvement import ImprovementContract, evaluate_improvement
+        improvement_args = (improvement_contract, observe_improvement, verify_improvement)
+        if any(value is not None for value in improvement_args):
+            if (not isinstance(improvement_contract, ImprovementContract)
+                    or not callable(observe_improvement)
+                    or not callable(verify_improvement)):
+                raise ValueError("improvement binding requires contract, observations and independent verifier")
+            expected = (journal.mission_id, journal.objective, journal.terminal_outcome)
+            actual = (improvement_contract.mission_id, improvement_contract.objective,
+                      improvement_contract.terminal_outcome)
+            if expected != actual:
+                raise ValueError("improvement contract must preserve active mission identity")
+
         history = journal.revolution_receipts
         current_hashes = tuple(r.receipt_sha256 for r in self.controller.receipts)
         stored_hashes = tuple(r.receipt_sha256 for r in history)
@@ -110,6 +126,7 @@ class SpiralEngine:
             self.controller.restore(history)
 
         def perform_route(route):
+            before_improvement = observe_improvement() if improvement_contract is not None else None
             before = evaluate()
             intervention = propose(route, before)
             if not isinstance(intervention, Intervention):
@@ -120,6 +137,13 @@ class SpiralEngine:
             after = evaluate()
             receipt = self.controller.record(before, after, intervention)
             journal.append_revolution(receipt)
+            if improvement_contract is not None:
+                after_improvement = observe_improvement()
+                assessment = evaluate_improvement(
+                    improvement_contract, before_improvement, after_improvement,
+                    verify_evidence=verify_improvement,
+                )
+                journal.record_improvement(assessment)
             self.revolution_count = max(self.revolution_count, receipt.revolution)
             self.revolution_history.append({
                 "revolution": receipt.revolution,
