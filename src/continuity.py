@@ -65,7 +65,8 @@ class ContinuityJournal:
     """Append-only, SHA-linked mission journal with explicit source authority."""
 
     def __init__(self, path: Path | str, mission_id: str, objective: str, *,
-                 terminal_outcome: str, integrity_key: bytes | None = None):
+                 terminal_outcome: str, integrity_key: bytes | None = None,
+                 require_existing: bool = False):
         if not mission_id.strip() or not objective.strip() or not terminal_outcome.strip():
             raise ValueError('mission identity, objective and terminal outcome required')
         self.path = Path(path)
@@ -75,14 +76,28 @@ class ContinuityJournal:
         if integrity_key is not None and (not isinstance(integrity_key, bytes) or len(integrity_key) < 16):
             raise ValueError('journal authentication key must contain at least 16 bytes')
         self.integrity_key = integrity_key
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._events = _load(self.path.read_text('utf-8'), self.integrity_key) if self.path.exists() else []
+        if require_existing:
+            # A chat resume MUST NOT manufacture an empty replacement mission.
+            # The caller owns pre-existing storage and a separately pinned head.
+            if not self.path.is_file():
+                raise JournalIntegrityError('required existing journal is missing')
+            raw = self.path.read_text('utf-8')
+            if not raw.strip():
+                raise JournalIntegrityError('required existing journal is empty')
+            self._events = _load(raw, self.integrity_key)
+            if not self._events:
+                raise JournalIntegrityError('required existing journal has no events')
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._events = _load(self.path.read_text('utf-8'), self.integrity_key) if self.path.exists() else []
         if self._events:
             first = self._events[0]
             if (first['kind'] != 'mission' or first['data'] !=
                     {'mission_id': mission_id, 'objective': objective, 'terminal_outcome': terminal_outcome}):
                 raise JournalIntegrityError('mission identity mismatch')
         else:
+            if require_existing:
+                raise JournalIntegrityError('existing journal cannot be bootstrapped during recovery')
             self._append('mission', mission_id=mission_id, objective=objective, terminal_outcome=terminal_outcome)
 
     def _append(self, kind: str, **data: Any) -> dict[str, Any]:
