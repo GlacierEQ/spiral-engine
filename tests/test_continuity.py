@@ -13,6 +13,33 @@ class ContinuityTests(unittest.TestCase):
         self.file = Path(self.tmp.name) / 'mission.jsonl'
         self.journal = ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role', terminal_outcome='PAID_EMPLOYMENT')
 
+    def test_require_existing_refuses_missing_journal_without_creating_one(self):
+        missing = Path(self.tmp.name) / 'never-created.jsonl'
+        with self.assertRaises((JournalIntegrityError, FileNotFoundError)):
+            ContinuityJournal(missing, 'mission-1', 'Get a paid AI engineering role',
+                              terminal_outcome='PAID_EMPLOYMENT', require_existing=True)
+        self.assertFalse(missing.exists())
+
+    def test_require_existing_refuses_empty_history_without_bootstrapping(self):
+        self.file.write_text('')
+        with self.assertRaises(JournalIntegrityError):
+            ContinuityJournal(self.file, 'mission-1', 'Get a paid AI engineering role',
+                              terminal_outcome='PAID_EMPLOYMENT', require_existing=True)
+        self.assertEqual(self.file.read_bytes(), b'')
+
+    def test_require_existing_preserves_original_authenticated_chain(self):
+        key = b'independent-protected-test-secret-1234'
+        target = Path(self.tmp.name) / 'signed.jsonl'
+        written = ContinuityJournal(target, 'signed-1', 'Mission remains operational',
+                                    terminal_outcome='REAL_OUTCOME', integrity_key=key)
+        written.correct('Never claim completion from a draft')
+        before = target.read_bytes()
+        recovered = ContinuityJournal(target, 'signed-1', 'Mission remains operational',
+                                      terminal_outcome='REAL_OUTCOME', integrity_key=key,
+                                      require_existing=True)
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(recovered.corrections, ['Never claim completion from a draft'])
+
     def test_verified_fact_survives_restart_and_unverified_conflict(self):
         self.journal.verify_fact('application', 'received', source='employer:receipt-123', revision='A')
         self.journal.note_conflict('application', 'maybe rejected', source='assistant-summary')
