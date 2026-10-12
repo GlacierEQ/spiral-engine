@@ -76,6 +76,47 @@ class SpiralEngine:
         })
         return receipt
 
+    @staticmethod
+    def _pyramid_outcome_verifier(journal, verify_outcome, pyramid_state,
+                                  pyramid_verify, pyramid_source_dir):
+        """Bind native outcome checks to the exact shared Pyramid terminal proof."""
+        if pyramid_state is None and pyramid_verify is None:
+            return verify_outcome
+        if not callable(pyramid_state) or not callable(pyramid_verify) or not callable(verify_outcome):
+            raise ValueError("Pyramid requires state, independent proof and outcome callbacks")
+        import json
+        from pathlib import Path
+        from .progressive_pyramid_source import resolve_pyramid_source, validate_pyramid_run
+        lock = json.loads((Path(__file__).resolve().parents[1] /
+                           "config/progressive_pyramid_source_lock.json").read_text())
+        state = resolve_pyramid_source(lock, source_dir=pyramid_source_dir)
+        if state["status"] != "LOADED":
+            raise ValueError("Pyramid contract source not verified: " + state["status"])
+        initial = pyramid_state()
+        if (not isinstance(initial, dict)
+                or initial.get("mission_id") != journal.mission_id
+                or initial.get("original_outcome") != journal.objective
+                or initial.get("protocol") != lock["schema_id"]):
+            raise ValueError("Pyramid cannot replace original mission identity")
+        def bound(evidence):
+            if verify_outcome(evidence) is not True:
+                return False
+            current = pyramid_state()
+            if not isinstance(current, dict):
+                return False
+            center = current.get("center_point", {})
+            if not isinstance(center, dict) or center.get("status") != "MISSION_COMPLETE":
+                return False
+            proofs = center.get("outcome_proofs", [])
+            if not isinstance(proofs, list) or not any(
+                isinstance(item, dict) and item.get("source_ref") == evidence.receipt
+                for item in proofs
+            ):
+                return False
+            return not validate_pyramid_run(
+                current, lock, source_dir=pyramid_source_dir, verifier=pyramid_verify)
+        return bound
+
     def run_mission(
         self,
         journal,
@@ -90,6 +131,9 @@ class SpiralEngine:
         improvement_contract=None,
         observe_improvement=None,
         verify_improvement=None,
+        pyramid_state=None,
+        pyramid_verify=None,
+        pyramid_source_dir=None,
     ):
         """Run the ORIGINAL measured controller inside durable mission execution.
 
@@ -104,6 +148,9 @@ class SpiralEngine:
             from continuity import MissionRunner, RouteResult
 
         from .improvement import ImprovementContract, evaluate_improvement
+        terminal_verifier = verify_outcome
+        terminal_verifier = self._pyramid_outcome_verifier(
+            journal, verify_outcome, pyramid_state, pyramid_verify, pyramid_source_dir)
         improvement_args = (improvement_contract, observe_improvement, verify_improvement)
         if any(value is not None for value in improvement_args):
             if (not isinstance(improvement_contract, ImprovementContract)
@@ -173,7 +220,7 @@ class SpiralEngine:
 
         result = MissionRunner(journal).run(
             routes, perform_route, outcome_evidence,
-            max_attempts=max_attempts, verify_outcome=verify_outcome,
+            max_attempts=max_attempts, verify_outcome=terminal_verifier,
         )
         # Terminal outcome is journal-and-provider proof, never the quality
         # controller's independent notion of a completed quality revolution.
